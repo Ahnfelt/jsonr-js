@@ -68,7 +68,7 @@ class Encoder {
 
     _encodeBoolean(value) {
         this._extendBuffer(this._offset + 1);
-        this._dataView.setUint8(this._offset, value ? 0b1111_1101 : 0b1111_1110);
+        this._dataView.setUint8(this._offset, value ? 0b1111_1110 : 0b1111_1101);
         this._offset += 1;
     }
 
@@ -160,6 +160,12 @@ class Decoder {
         if(this._byte(0) !== 1) {
             throw new DecoderError(this._offset,
                 "Expected binary format version 1, but encountered " + this._byte(0));
+        }
+        this._offset += 1;
+        
+        if(this._byte(0) !== 0) {
+            throw new DecoderError(this._offset,
+                "Expected all-zero reserved byte, but encountered " + this._byte(0));
         }
         this._offset += 1;
         
@@ -331,6 +337,7 @@ class DecoderError extends Error {
 
 
 
-
-console.dir([...new Uint8Array(Encoder.encode([1, 2, 3]).buffer).slice(0, 30)]);
-console.dir(Decoder.decode(Encoder.encode([1, 2, 3])));
+let test = [1, "two", true, "two"];
+console.log(test);
+console.log([...new Uint8Array(Encoder.encode(test).buffer).slice(8, 30)]);
+console.log(Decoder.decode(Encoder.encode(test)));
