@@ -346,7 +346,7 @@ class Decoder {
 
     _decodeData(length) {
         let o = this._offset;
-        let m = decodeValue();
+        let m = this.decodeValue();
         if(typeof m !== 'string') {
             throw new DecoderError(o, "Expected a mediatype string");
         }
@@ -367,12 +367,3 @@ class DecoderError extends Error {
         this.offset = offset;
     }
 }
-
-
-
-let test = [{width: 10, height: 20}, {width: 20, height: 10}, {width: 15, height: 15}];
-console.log(test);
-console.log([...new Uint8Array(Encoder.encode(test).buffer).slice(8, 30)]);
-console.log("JSON: " + new TextEncoder().encode(JSON.stringify(test)).byteLength + " bytes");
-console.log("Binary: " + (Encoder.encode(test).byteLength - 8) + " bytes (+ 8 byte header)");
-console.log(Decoder.decode(Encoder.encode(test)));
