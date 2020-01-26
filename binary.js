@@ -5,11 +5,16 @@ class Encoder {
         this._staticDictionary = options.staticDictionary || [];
         this._dynamicDictionary = [];
         this._dynamicPositions = {};
+        this._dynamicInserted = 0;
         this._bytes = new Uint8Array(new ArrayBuffer(64 * 1024 * 1024));
         this._dataView = new DataView(this._bytes.buffer);
         this._offset = 0;
         if(this._staticDictionary.length > 2048) {
             throw 'Static dictionary exceeds maximum length (2048)';
+        }
+        this._staticPositions = {};
+        for(var i = 0; i < this._staticDictionary.length; i++) {
+            this._staticPositions[this._staticDictionary[i]] = i;
         }
     }
 
@@ -39,14 +44,42 @@ class Encoder {
     }
 
     _encodeString(value) {
+        // Check for empty string and dictionaries
+        if(value.length === 0) {
+            this._writeKindAndLength(2, 0);
+            return;
+        }
+        if(Object.prototype.hasOwnProperty.call(this._dynamicPositions, value)) {
+            this._extendBuffer(1);
+            this._dataView.setUint8(this._offset, this._dynamicPositions[value]);
+            this._offset += 1;
+            return;
+        }
+        if(Object.prototype.hasOwnProperty.call(this._staticPositions, value)) {
+            this._extendBuffer(2);
+            let v = 0b1100_0000_0000_0000 | this._staticPositions[value];
+            this._dataView.setUint16(this._offset, v);
+            this._offset += 2;
+            return;
+        }
+        // TODO: Check for "data:" prefix and attempt binary encoding
+        // Encode plain UTF-8 string
         let utf8 = this._textEncoder.encode(value);
-        // TODO: Check for data: and encode as binary
-        // TODO: Use dynamic dictionary
-        // TODO: Use static dictionary
         this._writeKindAndLength(2, utf8.length);
         this._extendBuffer(this._offset + utf8.length);
         this._bytes.set(utf8, this._offset);
         this._offset += utf8.length;
+        let i = this._dynamicInserted & 0b0111_1111;
+        // Update dynamic dictionary
+        if(utf8.length > 128) return;
+        this._dynamicDictionary[i] = value;
+        this._dynamicPositions[value] = i;
+        this._dynamicInserted += 1;
+        let j = this._dynamicInserted & 0b0111_1111;
+        let k = this._dynamicDictionary[j];
+        if(this._dynamicPositions[k] === j) {
+            delete this._dynamicPositions[k];
+        }
     }
 
     _encodeObject(value) {
@@ -113,7 +146,7 @@ class Encoder {
             this._dataView.setUint32(this._offset, length & 0xff_ff_ff_ff);
             this._offset += 4;
         } else {
-            throw 'Length exceeds what can be stored in a 48 bit value';
+            throw 'Length exceeds what can be stored in a 48 bit value: ' + length;
         }
     }
 
@@ -337,7 +370,9 @@ class DecoderError extends Error {
 
 
 
-let test = [1, "two", true, "two"];
+let test = [{width: 10, height: 20}, {width: 20, height: 10}, {width: 15, height: 15}];
 console.log(test);
 console.log([...new Uint8Array(Encoder.encode(test).buffer).slice(8, 30)]);
+console.log("JSON: " + new TextEncoder().encode(JSON.stringify(test)).byteLength + " bytes");
+console.log("Binary: " + (Encoder.encode(test).byteLength - 8) + " bytes (+ 8 byte header)");
 console.log(Decoder.decode(Encoder.encode(test)));
